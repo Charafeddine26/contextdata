@@ -1,0 +1,295 @@
+Let me give you another example for the page block "Content":
+file content.ts
+import { PageBlock, PageBlockInput, Registry } from './base'
+import { Apply } from '../../../cast'
+
+const kind = 'Content'
+
+interface Options {
+  body: string;
+}
+
+const defaults: Readonly<Options> = Object.freeze({
+  body: '',
+})
+
+export class PageBlockContent extends PageBlock {
+  readonly kind = kind
+
+  options: Options = { ...defaults }
+
+  constructor (i?: PageBlockInput) {
+    super(i)
+    this.applyOptions(i?.options as Partial<Options>)
+  }
+
+  applyOptions (o?: Partial<Options>): void {
+    if (!o) return
+
+    Apply(this.options, o, String, 'body')
+  }
+}
+
+Registry.set(kind, PageBlockContent)
+
+
+
+
+
+
+
+
+file ContentConfigurator.vue:
+<template>
+  <b-tab :title="$t('content.label')">
+    <b-form-group>
+      <c-rich-text-input
+        v-model="options.body"
+        :labels="{
+          urlPlaceholder: $t('content.urlPlaceholder'),
+          ok: $t('content.ok'),
+          openLinkInNewTab: $t('content.openLinkInNewTab'),
+        }"
+      />
+    </b-form-group>
+  </b-tab>
+</template>
+<script>
+import base from './base'
+import { components } from '@cortezaproject/corteza-vue'
+const { CRichTextInput } = components
+
+export default {
+  i18nOptions: {
+    namespaces: 'block',
+  },
+
+  name: 'Content',
+
+  components: {
+    CRichTextInput,
+  },
+
+  extends: base,
+}
+</script>
+
+
+
+
+
+file ContentBase.vue:
+<template>
+  <wrap
+    v-bind="$props"
+    v-on="$listeners"
+  >
+    <div
+      class="rt-content px-3 py-2"
+    >
+      <p
+        :style="{ 'white-space': 'pre-wrap' }"
+        v-html="options.body"
+      />
+    </div>
+  </wrap>
+</template>
+<script>
+import base from './base'
+
+export default {
+  extends: base,
+}
+</script>
+
+
+
+
+
+
+
+let me give you another example of the page block "file":
+file file.js:
+import { PageBlock, PageBlockInput, Registry } from './base'
+import { Apply } from '../../../cast'
+
+const kind = 'File'
+
+interface Options {
+  mode: string;
+  attachments: string[];
+  hideFileName: boolean;
+}
+
+const PageBlockFileDefaultMode = 'list'
+const PageBlockFileModes = [
+  // list of attachments, no preview
+  'list',
+  // grid of icons
+  'grid',
+  // single (first) image/file, show preview
+  'single',
+  // list of all images/files, show preview
+  'gallery',
+]
+
+const defaults: Readonly<Options> = Object.freeze({
+  mode: PageBlockFileDefaultMode,
+  attachments: [],
+  hideFileName: false,
+})
+
+export class PageBlockFile extends PageBlock {
+  readonly kind = kind
+
+  options: Options = { ...defaults }
+
+  constructor (i?: PageBlockInput) {
+    super(i)
+    this.applyOptions(i?.options as Partial<Options>)
+  }
+
+  applyOptions (o?: Partial<Options>): void {
+    if (!o) return
+
+    if (o.attachments) {
+      this.options.attachments = o.attachments
+    }
+
+    Apply(this.options, o, Boolean, 'hideFileName')
+
+    if (o.mode) {
+      if (PageBlockFileModes.includes(o.mode)) {
+        this.options.mode = o.mode
+      } else {
+        o.mode = PageBlockFileDefaultMode
+      }
+    }
+  }
+}
+
+Registry.set(kind, PageBlockFile)
+
+file FileConfigurator.vue:
+<template>
+  <b-tab :title="$t('kind.file.label')">
+    <b-form-group
+      horizontal
+      :description="$t('kind.file.view.modeFootnote')"
+      :label="$t('kind.file.view.modeLabel')"
+    >
+      <b-form-radio-group
+        v-model="options.mode"
+        buttons
+        button-variant="outline-secondary"
+        size="sm"
+        name="buttons2"
+        :options="modes"
+      />
+    </b-form-group>
+    <b-form-checkbox
+      v-model="options.hideFileName"
+      :disabled="!enableFileNameHiding"
+      class="mb-3"
+    >
+      {{ $t('kind.file.view.showName') }}
+    </b-form-checkbox>
+    <uploader
+      :endpoint="endpoint"
+      :max-filesize="$s('compose.Page.Attachments.MaxSize', 100)"
+      :accepted-files="$s('compose.Page.Attachments.Mimetypes', ['*/*'])"
+      @uploaded="appendAttachment"
+    />
+    <list-loader
+      kind="page"
+      enable-delete
+      :namespace="namespace"
+      :set.sync="options.attachments"
+      mode="list"
+      class="mt-2"
+    />
+  </b-tab>
+</template>
+<script>
+import base from './base'
+import Uploader from 'corteza-webapp-compose/src/components/Public/Page/Attachment/Uploader'
+import ListLoader from 'corteza-webapp-compose/src/components/Public/Page/Attachment/ListLoader'
+
+export default {
+  i18nOptions: {
+    namespaces: 'field',
+  },
+
+  name: 'File',
+
+  components: {
+    Uploader,
+    ListLoader,
+  },
+
+  extends: base,
+
+  computed: {
+    endpoint () {
+      const { pageID } = this.page
+
+      return this.$ComposeAPI.pageUploadEndpoint({
+        namespaceID: this.namespace.namespaceID,
+        pageID,
+      })
+    },
+
+    modes () {
+      return [
+        { value: 'list', text: this.$t('kind.file.view.list') },
+        { value: 'grid', text: this.$t('kind.file.view.grid') },
+        { value: 'single', text: this.$t('kind.file.view.single') },
+        { value: 'gallery', text: this.$t('kind.file.view.gallery') },
+      ]
+    },
+
+    enableFileNameHiding () {
+      return (this.options.mode === 'single') || (this.options.mode === 'gallery')
+    },
+  },
+
+  methods: {
+    appendAttachment ({ attachmentID } = {}) {
+      this.options.attachments.push(attachmentID)
+    },
+  },
+}
+</script>
+
+file FileBase.vue:
+<template>
+  <wrap
+    v-bind="$props"
+    v-on="$listeners"
+  >
+    <div
+      class="p-2 h-100"
+    >
+      <list-loader
+        class="h-100"
+        kind="page"
+        :set="options.attachments"
+        :namespace="namespace"
+        :mode="options.mode"
+        :hide-file-name="options.hideFileName"
+      />
+    </div>
+  </wrap>
+</template>
+<script>
+import base from './base'
+import ListLoader from '../Public/Page/Attachment/ListLoader'
+
+export default {
+  components: {
+    ListLoader,
+  },
+
+  extends: base,
+}
+</script>
